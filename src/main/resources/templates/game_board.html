@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>おせろ</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css">
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <style>
+        .square {
+            background-color: forestgreen;
+            height: 100px;
+            width: 100px;
+        }
+        .square > .blank {
+        }
+        .square > .blacked {
+            background-color: black;
+            margin: auto;
+            border-radius: 35px;
+            height: 70px;
+            width: 70px;
+        }
+        .square > .whited {
+            background-color: white;
+            margin: auto;
+            border-radius: 35px;
+            height: 70px;
+            width: 70px;
+        }
+        .square > .available {
+            background-color: rgba(255, 255, 255, 0.2);
+            margin: auto;
+            border-radius: 35px;
+            height: 70px;
+            width: 70px;
+        }
+    </style>
+</head>
+<body>
+<table>
+    <tbody>
+    <tr th:each="y : ${#numbers.sequence(1,8)}">
+        <td class="square" th:each="x : ${#numbers.sequence(1,8)}" th:id="${x + '-' + y}">
+            <div class="state"></div>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<div>
+    <div id="start-panel">
+        <label><input type="radio" name="first-side" value="WHITE" checked />白から</label>
+        <label><input type="radio" name="first-side" value="BLACK"/>黒から</label>
+        <button id="start-button">すたーと</button>
+    </div>
+    <div id="label-current-side"></div>
+</div>
+<script>
+    $(function () {
+    	ajax("post", "http://localhost:8080/reversi/api/new/", undefined, function () {});
+        $("#start-button").on("click", function () {
+        	$("#start-panel").hide();
+        	var firstSide = $("input[name='first-side']:checked").val();
+			ajax("post", "http://localhost:8080/reversi/api/start/", {first_side: firstSide}, function (response) {
+				var nextSide = response["gameInfo"]["nextSide"] ;
+				$("#label-current-side").text((nextSide === "WHITE" ? "白" : "黒")+"の番です。");
+				reRenderBoard(nextSide, response["gameInfo"]["currentBoardMap"], response["gameInfo"]["availableIndexList"]);
+			});
+        });
+        function takeAction(side, x, y) {
+			ajax("post", "http://localhost:8080/reversi/api/action/", {side: side, x: x, y: y}, function (response) {
+				var result = response["actionResult"];
+				var gameInfo = result["gameInfo"];
+				var nextSide = gameInfo["nextSide"];
+				if (!!result["gameEnd"]) {
+					ajax("get", "http://localhost:8080/reversi/api/end/", undefined, function (endResult) {
+						$("#label-current-side").text(endResult["message"]);
+					});
+				} else {
+					$("#label-current-side").text((nextSide === "WHITE" ? "白" : "黒")+"の番です。");
+				}
+				reRenderBoard(nextSide, gameInfo["currentBoardMap"], gameInfo["availableIndexList"]);
+			});
+        }
+		function reRenderBoard(side, boardMap, availableList) {
+			$.each(boardMap, function (squareId, status) {
+				$("#"+squareId).off("click")
+					.find(".state").removeClass("blank whited blacked available").addClass(status.toLowerCase())
+			});
+			$.each(availableList, function (i, index) {
+				var x = index["x"];
+				var y = index["y"];
+				var squareId = x + "-" + y;
+				$("#"+ squareId)
+					.on("click", function () { takeAction(side, x, y) })
+					.find(".state").addClass("available");
+			})
+		}
+		function ajax(method, url, object, callback) {
+        	var json = object === undefined ? "" : JSON.stringify(object);
+			$.ajax(url, {
+				data: json,
+				contentType: "application/json",
+				type: method
+			}).done(callback).fail(function (xhr, errorText, thrown) {
+				console.error(xhr, errorText, thrown);
+				alert("エラー発生。");
+            });
+		}
+    });
+</script>
+</body>
+</html>
